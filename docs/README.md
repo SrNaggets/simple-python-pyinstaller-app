@@ -116,4 +116,11 @@ resource "docker_container" "jenkins" {
 - Inicializar el directorio de trabajo con la configuración hecha ````terraform init````
 - Verificar si la configuración es sintacticamente válida ````terraform validate````
 - Aplicar los archivos de configuración ````terraform apply````
-  
+
+## 8) Crear Pipeline en Jenkins
+
+- Accede a Jenkins en http://localhost:8080
+- Usa la clave inicial que saldrá con ````docker exec -it jenkins-blueocean cat /var/jenkins_home/secrets/initialAdminPassword````
+- Instalar plugins recomendados y crear usuario
+- Crear nueva tarea tipo Pipeline
+- Configuracion: Pipeline script from SCM, SCM git, url del fork, Script path = Jenkinsfile
