@@ -111,4 +111,9 @@ resource "docker_container" "jenkins" {
 - Para hacer el commit ````git commit -m "Añadido archivo Despliegues.tf con configuración de Terraform"````
 - Para hacer el push ````git push origin master````
 
+## 7) Aplicar Terraform
+
+- Inicializar el directorio de trabajo con la configuración hecha ````terraform init````
+- Verificar si la configuración es sintacticamente válida ````terraform validate````
+- Aplicar los archivos de configuración ````terraform apply````
   
