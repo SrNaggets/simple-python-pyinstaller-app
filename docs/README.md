@@ -129,8 +129,12 @@ resource "docker_container" "jenkins" {
 
 ````
 pipeline {
-    # Permite que el pipeline se ejecute en cualquier nodo disponible en el servidor Jenkins.
-    agent any
+    # Configura el agente Docker para ejecutar el pipeline en un contenedor con Python preinstalado.
+    agent {
+        docker {
+            image 'python:3.9' # Utiliza la imagen oficial de Python versión 3.9
+        }
+    }
     options {
         # Si las pruebas fallan o un archivo no es válido, las etapas posteriores no se ejecutarán.
         skipStagesAfterUnstable()
@@ -140,34 +144,35 @@ pipeline {
             steps {
                 # Compila los archivos Python (add2vals.py y calc.py) para asegurarse de que no tienen errores de sintaxis.
                 sh 'python -m py_compile sources/add2vals.py sources/calc.py'
-                # Guarda los archivos compilados para usarlos en etapas posteriores sin necesidad de recompilar
+                # Guarda los archivos compilados para usarlos en etapas posteriores sin necesidad de recompilar.
                 stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
         stage('Test') {
             steps {
-                # Ejecuta pruebas automatizadas de un archivo de pruebas y generando un reporte
+                # Ejecuta pruebas automatizadas de un archivo de pruebas y genera un reporte.
                 sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
             }
             post {
                 always {
-                    # Publicar los resultados de las pruebas en la interfaz
+                    # Publica los resultados de las pruebas en la interfaz.
                     junit 'test-reports/results.xml'
                 }
             }
         }
         stage('Deliver') { 
             steps {
-                # Genera un ejecutable independiente a partir de un script asegurandose que todo esté en un solo archivo ejecutable
+                # Genera un ejecutable independiente a partir de un script asegurándose de que todo esté en un solo archivo ejecutable.
                 sh "pyinstaller --onefile sources/add2vals.py" 
             }
             post {
                 success {
-                    # Si hay éxito se archiva el ejecutable como un artefacto jenkins para permitir que pueda ser descargado desde Jenkins
+                    # Si hay éxito, se archiva el ejecutable como un artefacto de Jenkins para permitir que pueda ser descargado desde Jenkins.
                     archiveArtifacts 'dist/add2vals' 
                 }
             }
         }
     }
 }
+
 ````
