@@ -163,8 +163,9 @@ pipeline {
     agent {
         docker {
             image 'docker:19.03.12' 
-            # Da permisos adicionales para que pueda ejecutar comandos de Docker dentro de Docker y monta los certificados TSL compartidos para poder comunicarse de forma segura con el contenedor dind
-            args '--privileged -v /certs:/certs -e DOCKER_TLS_CERTDIR=/certs'
+            # Da permisos adicionales para que pueda ejecutar comandos de Docker dentro de Docker y monta los certificados TSL compartidos para poder comunicarse de forma segura con el contenedor dind. Y indica explícitamente al contenedor de Jenkins que se conecte al demonio Docker expuesto por dind-container en el puerto 2377.
+            args '--privileged -v /certs:/certs -e DOCKER_TLS_CERTDIR=/certs --host tcp://dind:2377'
+
         }
     }
     stages {
