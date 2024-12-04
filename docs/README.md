@@ -158,25 +158,30 @@ terraform.tfstate.backup
 
 ````
 pipeline {
+    # Un contenedor Docker efímero para ejecutar las etapas definidas a continuación, se comunica con el dind container para ejecutar comandos Docker
     agent {
         docker {
-            image 'docker:19.03.12' // o una versión compatible con DinD
+            image 'docker:19.03.12' 
+            # Da permisos adicionales para que pueda ejecutar comandos de Docker dentro de Docker y monta los certificados TSL compartidos para poder comunicarse de forma segura con el contenedor dind
             args '--privileged -v /certs:/certs -e DOCKER_TLS_CERTDIR=/certs'
         }
     }
     stages {
         stage('Build') {
             steps {
+                # Compila los archivos Python para verificar que no contienen errores de sintaxis.
                 sh 'python -m py_compile sources/add2vals.py sources/calc.py'
             }
         }
         stage('Test') {
             steps {
+                # Ejecuta el archivo con las pruebas unitarias para validar que las funciones de los archivos Pyhton funcionan correctamente y genera el reporte en formato JUnit XML
                 sh 'pytest --junit-xml test-reports/results.xml sources/test_calc.py'
             }
         }
         stage('Deploy') {
             steps {
+                # Crea un ejecutable a partir del script Python que incluye todo lo necesario para ejecutarse sin depender de un intérprete Python.
                 sh 'pyinstaller --onefile sources/add2vals.py'
             }
         }
