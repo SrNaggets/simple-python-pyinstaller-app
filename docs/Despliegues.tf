@@ -10,12 +10,12 @@ terraform {
 provider "docker" {}
 
 resource "docker_network" "jenkins_network" {
-  name = "jenkins"
+  name = "jenkins-network"
 }
 
 resource "docker_container" "jenkins_dind" {
   image       = "docker:dind"
-  name        = "jenkins-dind"
+  name        = "dind-container"
   privileged  = true
   networks_advanced {
     name    = docker_network.jenkins_network.name
@@ -66,5 +66,3 @@ resource "docker_container" "jenkins" {
 resource "docker_volume" "jenkins_dind_certs" {
   name = "jenkins-dind-certs"
 }
-
-
