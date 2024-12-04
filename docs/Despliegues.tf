@@ -13,20 +13,23 @@ resource "docker_network" "jenkins_network" {
   name = "jenkins-network"
 }
 
+resource "docker_volume" "jenkins_dind_certs" {
+  name = "jenkins-dind-certs"
+}
+
 resource "docker_container" "jenkins_dind" {
-  image       = "docker:20.10-dind"
+  image       = "docker:20.10.24-dind"  # Versión específica de DinD
   name        = "dind-container"
   privileged  = true
   networks_advanced {
-    name    = docker_network.jenkins_network.name
-    aliases = ["dind"]
+    name = docker_network.jenkins_network.name
   }
   env = [
     "DOCKER_TLS_CERTDIR=/certs",
     "DOCKER_TLS_SAN=dind"
   ]
   mounts {
-    source = "jenkins-dind-certs"
+    source = docker_volume.jenkins_dind_certs.name
     target = "/certs"
     type   = "volume"
   }
@@ -37,11 +40,10 @@ resource "docker_container" "jenkins_dind" {
 }
 
 resource "docker_container" "jenkins" {
-  image       = "myjenkins-blueocean"
+  image       = "myjenkins-blueocean"  # Imagen personalizada de Jenkins
   name        = "jenkins-blueocean"
   networks_advanced {
-    name    = docker_network.jenkins_network.name
-    aliases = ["jenkins"]
+    name = docker_network.jenkins_network.name
   }
   env = [
     "DOCKER_HOST=tcp://dind:2376",
@@ -49,7 +51,7 @@ resource "docker_container" "jenkins" {
     "DOCKER_TLS_VERIFY=1"
   ]
   mounts {
-    source = "jenkins-dind-certs"
+    source = docker_volume.jenkins_dind_certs.name
     target = "/certs"
     type   = "volume"
   }
@@ -61,8 +63,4 @@ resource "docker_container" "jenkins" {
     internal = 50000
     external = 50000
   }
-}
-
-resource "docker_volume" "jenkins_dind_certs" {
-  name = "jenkins-dind-certs"
 }
