@@ -35,7 +35,7 @@ resource "docker_container" "jenkins_dind" {
   }
   ports {
     internal = 2376
-    external = 2376
+    external = 2377
   }
 }
 
@@ -46,7 +46,7 @@ resource "docker_container" "jenkins" {
     name = docker_network.jenkins_network.name
   }
   env = [
-    "DOCKER_HOST=tcp://dind:2376",
+    "DOCKER_HOST=tcp://dind:2377",
     "DOCKER_CERT_PATH=/certs/client",
     "DOCKER_TLS_VERIFY=1"
   ]
