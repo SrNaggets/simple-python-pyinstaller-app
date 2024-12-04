@@ -22,7 +22,7 @@ resource "docker_container" "jenkins_dind" {
     aliases = ["dind"]
   }
   env = [
-    "DOCKER_TLS_CERTDIR=/certs"
+    "DOCKER_TLS_CERTDIR=/certs",
     "DOCKER_TLS_SAN=dind"
   ]
   mounts {
