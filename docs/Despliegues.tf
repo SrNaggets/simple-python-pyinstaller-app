@@ -24,6 +24,7 @@ resource "docker_container" "jenkins_dind" {
 
   networks_advanced {
     name = docker_network.jenkins_network.name
+    aliases = ["dind"]
   }
 
   env = [

@@ -65,6 +65,7 @@ resource "docker_container" "jenkins_dind" {
 
   networks_advanced {
     name = docker_network.jenkins_network.name
+    aliases = ["dind"]
   }
   # El directorio donde se almacenan los certificados TLS para la comunicación segura entre Docker y Jenkins.
   env = [
