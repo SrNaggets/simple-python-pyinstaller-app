@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'docker:19.03.12' // o una versión compatible con DinD
+            image 'docker:19.03.12' 
             args '--privileged -v /certs:/certs -e DOCKER_TLS_CERTDIR=/certs'
         }
     }
