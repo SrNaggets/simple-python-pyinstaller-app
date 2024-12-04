@@ -45,15 +45,15 @@ terraform {
   }
 }
 
-# Configura el proveedor Docker para que Terraform interactue con Docker en mi máquina local
+# Configura el proveedor Docker para que Terraform interactúe con Docker en mi máquina local.
 provider "docker" {}
 
-# Crear la red Docker para que los contenedores se comuniquen
+# Crear la red Docker para que los contenedores se comuniquen.
 resource "docker_network" "jenkins_network" {
   name = "jenkins"
 }
 
-# Crear el contenedor Docker in Docker (DinD)
+# Crear el contenedor Docker in Docker (DinD).
 resource "docker_container" "jenkins_dind" {
   image       = "docker:dind"
   name        = "jenkins-dind"
@@ -62,18 +62,24 @@ resource "docker_container" "jenkins_dind" {
     name    = docker_network.jenkins_network.name
     aliases = ["dind"]
   }
-  env = {
-    # Habilitamos TLS para seguridad
-    DOCKER_TLS_CERTDIR = "/certs"
+  env = [
+    # Habilitamos TLS para seguridad.
+    "DOCKER_TLS_CERTDIR=/certs"
+  ]
+  mounts {
+    # Montamos un volumen para almacenar los certificados TLS generados por DinD.
+    source = "jenkins-dind-certs"
+    target = "/certs"
+    type   = "volume"
   }
   ports {
-    # El puerto 2376 es el puerto estándar utilizado por Docker para habilitar comunicación segura mediante TLS 
+    # El puerto 2376 es el puerto estándar utilizado por Docker para habilitar comunicación segura mediante TLS.
     internal = 2376
     external = 2376
   }
 }
 
-# Crear el contenedor de Jenkins
+# Crear el contenedor de Jenkins.
 resource "docker_container" "jenkins" {
   image       = "myjenkins-blueocean"
   name        = "jenkins-blueocean"
@@ -81,16 +87,22 @@ resource "docker_container" "jenkins" {
     name    = docker_network.jenkins_network.name
     aliases = ["jenkins"]
   }
-  env = {
+  env = [
     # Define la dirección del servidor Docker con el que Jenkins se conectará.
-    DOCKER_HOST       = "tcp://dind:2376"
+    "DOCKER_HOST=tcp://dind:2376",
     # Especifica la ruta en el contenedor donde están almacenados los certificados TLS necesarios para la autenticación segura.
-    DOCKER_CERT_PATH  = "/certs/client"
+    "DOCKER_CERT_PATH=/certs/client",
     # Habilita la verificación TLS para asegurar que la comunicación entre Jenkins y jenkins-dind sea cifrada y autenticada.
-    DOCKER_TLS_VERIFY = "1"
+    "DOCKER_TLS_VERIFY=1"
+  ]
+  mounts {
+    # Compartimos los certificados generados por DinD con el contenedor Jenkins.
+    source = "jenkins-dind-certs"
+    target = "/certs"
+    type   = "volume"
   }
   ports {
-    # Permite acceder a la interfaz de Jenkins desde el navegador
+    # Permite acceder a la interfaz de Jenkins desde el navegador.
     internal = 8080
     external = 8080
   }
@@ -101,6 +113,12 @@ resource "docker_container" "jenkins" {
   }
 }
 
+# Crear el volumen compartido para los certificados.
+resource "docker_volume" "jenkins_dind_certs" {
+  name = "jenkins-dind-certs"
+}
+
+
 ````
 
 ## 6) Subir el despliegue al repositorio  
@@ -109,7 +127,7 @@ resource "docker_container" "jenkins" {
 - Para comprobarlo ````git status````
 - Para poder hacer el commit debo identificarme ````git config --global user.name "Tu Nombre"```` y ````git config --global user.email "tuemail@example.com"````
 - Para hacer el commit ````git commit -m "Añadido archivo Despliegues.tf con configuración de Terraform"````
-- Para hacer el push ````git push origin master````
+- Para hacer el push ````git push````
 
 ## 7) Aplicar Terraform
 
