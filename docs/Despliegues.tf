@@ -18,26 +18,34 @@ resource "docker_volume" "jenkins_dind_certs" {
 }
 
 resource "docker_container" "jenkins_dind" {
-  image       = "docker:20.10.24-dind"  # Versión específica de DinD
+  image       = "docker:20.10.24-dind"
   name        = "dind-container"
   privileged  = true
+
   networks_advanced {
     name = docker_network.jenkins_network.name
   }
+
   env = [
-    "DOCKER_TLS_CERTDIR=/certs",
-    "DOCKER_TLS_SAN=dind,localhost,127.0.0.1"
+    "DOCKER_TLS_CERTDIR=/certs"
   ]
+
   mounts {
-    source = docker_volume.jenkins_dind_certs.name
+    source = "jenkins-dind-certs"
     target = "/certs"
     type   = "volume"
   }
+  mounts {
+    target = "/var/lib/docker"
+    type   = "volume"
+  }
+
   ports {
     internal = 2376
     external = 2377
   }
 }
+
 
 resource "docker_container" "jenkins" {
   image       = "myjenkins-blueocean"  # Imagen personalizada de Jenkins
