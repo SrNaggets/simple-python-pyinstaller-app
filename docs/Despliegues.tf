@@ -14,7 +14,7 @@ resource "docker_network" "jenkins_network" {
 }
 
 resource "docker_container" "jenkins_dind" {
-  image       = "docker:dind"
+  image       = "docker:20.10-dind"
   name        = "dind-container"
   privileged  = true
   networks_advanced {
