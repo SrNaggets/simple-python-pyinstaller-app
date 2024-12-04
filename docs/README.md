@@ -131,6 +131,14 @@ resource "docker_volume" "jenkins_dind_certs" {
 
 ## 7) Aplicar Terraform
 
+- Editar el archivo .gitignore para que Git evite rastrear los archivos generados automáticamente por Terraform ya que contienen información sensible, como credenciales o detalles específicos del entorno, al final del archivo .gitignore incluir:
+````
+# Ignorar archivos de Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+````
 - Inicializar el directorio de trabajo con la configuración hecha ````terraform init````
 - Verificar si la configuración es sintacticamente válida ````terraform validate````
 - Aplicar los archivos de configuración ````terraform apply````
