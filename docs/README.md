@@ -35,7 +35,7 @@ Para verificar ````docker images````
 
 Crear el archivo Despliegues.tf con el siguiente contenido:
 ````
-# La configuración básica de Terraform.
+# Define el proveedor y la versión
 terraform {
   required_providers {
     docker = {
@@ -44,83 +44,83 @@ terraform {
     }
   }
 }
-
-# Configura el proveedor Docker para que Terraform interactúe con Docker en mi máquina local.
+# Configura proveedor Docker, que permitirá a Terraform interacturar con Docker para gestionar los contenedores, redes y volúmenes
 provider "docker" {}
 
-# Crear la red Docker para que los contenedores se comuniquen.
+# Permite que los contenedores de Jenkins y Docker-in-Docker se comuniquen entre sí dentro de una red privada y aislada
 resource "docker_network" "jenkins_network" {
-  name = "jenkins"
+  name = "jenkins-network"
 }
 
-# Crear el contenedor Docker in Docker (DinD).
-resource "docker_container" "jenkins_dind" {
-  image       = "docker:dind"
-  name        = "jenkins-dind"
-  privileged  = true
-  networks_advanced {
-    name    = docker_network.jenkins_network.name
-    aliases = ["dind"]
-  }
-  env = [
-    # Habilitamos TLS para seguridad.
-    "DOCKER_TLS_CERTDIR=/certs",
-    # Especifica los nombres alternativos válidos para los certificados TLS generados por el servidor Docker.
-    # Esto asegura que el alias 'dind' sea reconocido como un nombre válido en los certificados.
-    "DOCKER_TLS_SAN=dind"
-  ]
-  mounts {
-    # Montamos un volumen para almacenar los certificados TLS generados por DinD.
-    source = "jenkins-dind-certs"
-    target = "/certs"
-    type   = "volume"
-  }
-  ports {
-    # El puerto 2376 es el puerto estándar utilizado por Docker para habilitar comunicación segura mediante TLS.
-    internal = 2376
-    external = 2376
-  }
-}
-
-# Crear el contenedor de Jenkins.
-resource "docker_container" "jenkins" {
-  image       = "myjenkins-blueocean"
-  name        = "jenkins-blueocean"
-  networks_advanced {
-    name    = docker_network.jenkins_network.name
-    aliases = ["jenkins"]
-  }
-  env = [
-    # Define la dirección del servidor Docker con el que Jenkins se conectará.
-    "DOCKER_HOST=tcp://dind:2376",
-    # Especifica la ruta en el contenedor donde están almacenados los certificados TLS necesarios para la autenticación segura.
-    "DOCKER_CERT_PATH=/certs/client",
-    # Habilita la verificación TLS para asegurar que la comunicación entre Jenkins y jenkins-dind sea cifrada y autenticada.
-    "DOCKER_TLS_VERIFY=1"
-  ]
-  mounts {
-    # Compartimos los certificados generados por DinD con el contenedor Jenkins.
-    source = "jenkins-dind-certs"
-    target = "/certs"
-    type   = "volume"
-  }
-  ports {
-    # Permite acceder a la interfaz de Jenkins desde el navegador.
-    internal = 8080
-    external = 8080
-  }
-  ports {
-    # Permite que agentes de Jenkins se conecten al servidor Jenkins.
-    internal = 50000
-    external = 50000
-  }
-}
-
-# Crear el volumen compartido para los certificados.
+# Este volumen asegura que los datos de certificados TSL persistan incluso si el contenedor es eliminado.
 resource "docker_volume" "jenkins_dind_certs" {
   name = "jenkins-dind-certs"
 }
 
+resource "docker_container" "jenkins_dind" {
+  image       = "docker:20.10.24-dind"
+  name        = "dind-container"
+  # Para ejecutar Docker dentro de Docker es necesario que el contenedor tenga privilegios
+  privileged  = true
+
+  networks_advanced {
+    name = docker_network.jenkins_network.name
+  }
+  # El directorio donde se almacenan los certificados TLS para la comunicación segura entre Docker y Jenkins.
+  env = [
+    "DOCKER_TLS_CERTDIR=/certs"
+  ]
+  # Monta el volumen para almacenar los certificados TLS.
+  mounts {
+    source = "jenkins-dind-certs"
+    target = "/certs"
+    type   = "volume"
+  }
+  # Monta un volumen para almacenar los datos del daemon de Docker 
+  mounts {
+    target = "/var/lib/docker"
+    type   = "volume"
+  }
+  # Expone el puerto interno 2376 de Docker en el puerto externo 2377 para que Jenkins pueda conectarse al daemon de Docker.
+  ports {
+    internal = 2376
+    external = 2377
+  }
+}
+
+
+resource "docker_container" "jenkins" {
+  # Uso de la imagen hecha con el Dockerfile
+  image       = "myjenkins-blueocean"  
+  name        = "jenkins-blueocean"
+  networks_advanced {
+    name = docker_network.jenkins_network.name
+  }
+  env = [
+     # Configura Jenkins para que se conecte al daemon Docker del contenedor dind-container a través del puerto 2377
+    "DOCKER_HOST=tcp://dind:2377",
+     # Especifica la ruta donde Jenkins buscará los certificados TLS para conectarse de manera segura al daemon de Docker
+    "DOCKER_CERT_PATH=/certs/client",
+     # Habilita la verificación TLS
+    "DOCKER_TLS_VERIFY=1"
+  ]
+  # Monta el volumen jenkins-dind-certs en /certs dentro del contenedor Jenkins para usar los certificados TLS compartidos.
+  mounts {
+    source = docker_volume.jenkins_dind_certs.name
+    target = "/certs"
+    type   = "volume"
+  }
+  # Interfaz web de Jenkins.
+  ports {
+    internal = 8080
+    external = 8080
+  }
+  # Puerto usado para la comunicación con agentes de Jenkins
+  ports {
+    internal = 50000
+    external = 50000
+  }
+}
 
 ````
 
