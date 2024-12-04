@@ -26,7 +26,7 @@ resource "docker_container" "jenkins_dind" {
   }
   env = [
     "DOCKER_TLS_CERTDIR=/certs",
-    "DOCKER_TLS_SAN=dind"
+    "DOCKER_TLS_SAN=dind,localhost,127.0.0.1"
   ]
   mounts {
     source = docker_volume.jenkins_dind_certs.name
