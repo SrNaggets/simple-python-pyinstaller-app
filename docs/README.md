@@ -65,6 +65,9 @@ resource "docker_container" "jenkins_dind" {
   env = [
     # Habilitamos TLS para seguridad.
     "DOCKER_TLS_CERTDIR=/certs"
+    # Especifica los nombres alternativos válidos para los certificados TLS generados por el servidor Docker.
+    # Esto asegura que el alias 'dind' sea reconocido como un nombre válido en los certificados.
+    "DOCKER_TLS_SAN=dind"
   ]
   mounts {
     # Montamos un volumen para almacenar los certificados TLS generados por DinD.

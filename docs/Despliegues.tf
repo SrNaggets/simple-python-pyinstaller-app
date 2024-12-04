@@ -23,6 +23,7 @@ resource "docker_container" "jenkins_dind" {
   }
   env = [
     "DOCKER_TLS_CERTDIR=/certs"
+    "DOCKER_TLS_SAN=dind"
   ]
   mounts {
     source = "jenkins-dind-certs"
