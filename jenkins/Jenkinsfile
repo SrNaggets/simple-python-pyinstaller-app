@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'docker:27.3.1' 
-            args '--privileged -v /certs:/certs -e DOCKER_TLS_CERTDIR=/certs --host tcp://dind:2376'
+            args '--privileged -v /certs:/certs -e DOCKER_TLS_CERTDIR=/certs'
 
         }
     }
