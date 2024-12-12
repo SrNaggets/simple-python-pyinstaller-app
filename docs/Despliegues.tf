@@ -1,75 +1,90 @@
 terraform {
   required_providers {
     docker = {
-      source  = "kreuzwerker/docker"
-      version = "~> 3.0.1"
+      source = "kreuzwerker/docker"
+      version = "~> 3.0"
     }
   }
 }
 
 provider "docker" {}
 
+
 resource "docker_network" "jenkins_network" {
-  name = "jenkins-network"
+  name = "jenkins"
 }
 
-resource "docker_volume" "jenkins_volume" {
-  name = "jenkins-volume"
+resource "docker_volume" "jenkins_data" {
+  name = "jenkins-data"
 }
+
+resource "docker_volume" "jenkins_certs" {
+  name = "jenkins-docker-certs"
+}
+
 
 resource "docker_image" "dind_image" {
-  name         = "docker:20.10.24-dind"
+  name         = "docker:dind"
   keep_locally = false
 }
 
-resource "docker_container" "dind_container" {
-  image       = docker_image.dind_image.name
-  name        = "dind"
-  privileged  = true
 
+resource "docker_container" "dind" {
+  name  = "jenkins-docker"
+  image = docker_image.dind_image.name
+  privileged = true
   networks_advanced {
-    name    = docker_network.jenkins_network.name
-    aliases = ["dind"]
+    name = docker_network.jenkins_network.name
+    aliases = ["docker"]
   }
-
-  ports {
-    internal = 2375
-    external = 2375
-  }
-
-  command = [
-    "dockerd",
-    "--host=tcp://0.0.0.0:2375",
-    "--host=unix:///var/run/docker.sock"
+  env = [
+    "DOCKER_TLS_CERTDIR=/certs"
   ]
+  volumes {
+    volume_name    = docker_volume.jenkins_certs.name
+    container_path = "/certs/client"
+  }
+  volumes {
+    volume_name    = docker_volume.jenkins_data.name
+    container_path = "/var/jenkins_home"
+  }
+  ports {
+    internal = 2376
+    external = 2376
+  }
 }
 
-resource "docker_container" "jenkins_container" {
-  image       = "myjenkins-blueocean"  
-  name        = "jenkins"
-  restart = "unless-stopped"
-  depends_on = [docker_container.dind_container]
 
+resource "docker_container" "jenkins" {
+  name  = "jenkins-blueocean"
+  image = "myjenkins-blueocean" 
+  restart = "on-failure"
+  depends_on = [docker_container.dind] 
   networks_advanced {
     name = docker_network.jenkins_network.name
   }
   env = [
-    "DOCKER_HOST=tcp://dind:2375"
+    "DOCKER_HOST=tcp://docker:2376",
+    "DOCKER_CERT_PATH=/certs/client",
+    "DOCKER_TLS_VERIFY=1"
   ]
-
   volumes {
-    volume_name   = docker_volume.jenkins_volume.name
+    volume_name    = docker_volume.jenkins_data.name
     container_path = "/var/jenkins_home"
   }
-
+  volumes {
+    volume_name    = docker_volume.jenkins_certs.name
+    container_path = "/certs/client"
+    read_only      = true
+  }
   ports {
     internal = 8080
     external = 8080
   }
-
   ports {
     internal = 50000
     external = 50000
   }
 }
+
 
