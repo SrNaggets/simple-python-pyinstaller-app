@@ -2,7 +2,7 @@ terraform {
   required_providers {
     docker = {
       source = "kreuzwerker/docker"
-      version = "~> 3.0"
+      version = "~> 3.0.1"
     }
   }
 }
@@ -11,15 +11,15 @@ provider "docker" {}
 
 
 resource "docker_network" "jenkins_network" {
-  name = "jenkins"
+  name = "jenkins-network"
 }
 
-resource "docker_volume" "jenkins_data" {
-  name = "jenkins-data"
+resource "docker_volume" "jenkins_volume" {
+  name = "jenkins-volume"
 }
 
-resource "docker_volume" "jenkins_certs" {
-  name = "jenkins-docker-certs"
+resource "docker_volume" "certs_volume" {
+  name = "certs"
 }
 
 
@@ -29,8 +29,8 @@ resource "docker_image" "dind_image" {
 }
 
 
-resource "docker_container" "dind" {
-  name  = "jenkins-docker"
+resource "docker_container" "dind_container" {
+  name  = "dind"
   image = docker_image.dind_image.name
   privileged = true
   networks_advanced {
@@ -41,11 +41,11 @@ resource "docker_container" "dind" {
     "DOCKER_TLS_CERTDIR=/certs"
   ]
   volumes {
-    volume_name    = docker_volume.jenkins_certs.name
+    volume_name    = docker_volume.certs_volume.name
     container_path = "/certs/client"
   }
   volumes {
-    volume_name    = docker_volume.jenkins_data.name
+    volume_name    = docker_volume.jenkins_volume.name
     container_path = "/var/jenkins_home"
   }
   ports {
@@ -55,11 +55,11 @@ resource "docker_container" "dind" {
 }
 
 
-resource "docker_container" "jenkins" {
-  name  = "jenkins-blueocean"
+resource "docker_container" "jenkins_container" {
+  name  = "jenkins"
   image = "myjenkins-blueocean" 
-  restart = "on-failure"
-  depends_on = [docker_container.dind] 
+  restart = "unless-stopped"
+  depends_on = [docker_container.dind_container] 
   networks_advanced {
     name = docker_network.jenkins_network.name
   }
@@ -69,11 +69,11 @@ resource "docker_container" "jenkins" {
     "DOCKER_TLS_VERIFY=1"
   ]
   volumes {
-    volume_name    = docker_volume.jenkins_data.name
+    volume_name    = docker_volume.jenkins_volume.name
     container_path = "/var/jenkins_home"
   }
   volumes {
-    volume_name    = docker_volume.jenkins_certs.name
+    volume_name    = docker_volume.certs_volume.name
     container_path = "/certs/client"
     read_only      = true
   }

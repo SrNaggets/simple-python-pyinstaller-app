@@ -8,6 +8,7 @@ Verificar ````docker --version```` , ````git --version```` y ````terraform --ver
 ## 2) Creación imagen de Jenkins usando Dockerfile
 
 ````
+# Usa una imagen de Jenkins con la JDK con la capacidad de interactuar con Docker y instala plugins esenciales para pipelines modernos y manejo de contenedores
  FROM jenkins/jenkins:2.479.2-jdk17
  USER root
  RUN apt-get update && apt-get install -y lsb-release
@@ -38,93 +39,117 @@ Crear el archivo Despliegues.tf con el siguiente contenido:
 terraform {
   required_providers {
     docker = {
-      source  = "kreuzwerker/docker"
+      source = "kreuzwerker/docker"
       version = "~> 3.0.1"
     }
   }
 }
-# Define cómo se conecta Terraform al servicio Docker.
-
+# Docker Desktop me configura automáticamente el socket necesario, eliminando la necesidad de configurar manualmente el host.
 provider "docker" {}
 
-# Jenkins necesita comunicarse con DinD para enviarle comandos Docker.
-
+# La misma red para ambos contenedores para que se puedan comunicar
 resource "docker_network" "jenkins_network" {
   name = "jenkins-network"
 }
 
-# El volumen para Jenkins es esencial para almacenar de manera persistente la configuración del servidor, los plugins, el historial de builds, los artefactos generados y las definiciones de pipelines. Esto asegura que, aunque el contenedor de Jenkins sea detenido o eliminado, toda esta información no se pierda, permitiendo reiniciar o migrar Jenkins sin necesidad de volver a configurarlo desde cero. También facilita la realización de backups y la restauración de datos en caso de fallos.
-
+# Para que configuraciones, credenciales, logs y el estado de los pipelines, no se pierda al reiniciar o actualizar el contenedor.
 resource "docker_volume" "jenkins_volume" {
-  name = "jenkins_volume"
+  name = "jenkins-volume"
 }
 
-# El volumen para DinD almacena de forma persistente las imágenes Docker, los contenedores creados durante los pipelines y los datos operativos del demonio Docker. Esto evita que se pierdan imágenes o contenedores al reiniciar DinD, ahorrando tiempo al no tener que reconstruirlos. Además, asegura un mejor rendimiento y permite gestionar eficientemente el almacenamiento, especialmente cuando se trabaja con múltiples builds o pruebas en el pipeline.
+# Para almacenar los certificados necesarios TLS para comunicación segura.
+resource "docker_volume" "certs_volume" {
+  name = "certs"
+}
 
-resource "docker_volume" "dind_volume" {
-  name = "dind_volume"
+resource "docker_image" "dind_image" {
+  name         = "docker:dind"
+  keep_locally = false
 }
 
 
 resource "docker_container" "dind_container" {
-  image       = "docker:20.10.24-dind"
-  name        = "dind_container"
+  name  = "dind"
+  image = docker_image.dind_image.name
 
-# Para ejecutar Docker dentro de Docker es necesario que el contenedor tenga privilegios
-
-  privileged  = true
+# Necesita permisos para ejecutar los comandos de Docker
+  privileged = true
 
   networks_advanced {
-    name    = docker_network.jenkins_network.name
+    name = docker_network.jenkins_network.name
 
-# Jenkins se comunicará con Dind para enviarle los comandos Docker, por tanto necesita saber como acceder al contenedor, así es mas claro
+# Para no depender de la dirección IP uso el alias, uso "Docker" pues no todos los alias son reconocidos como válidos.
+    aliases = ["docker"]
 
-    aliases = ["dind"]
   }
+
+# Para habilitar TLS
+  env = [
+    "DOCKER_TLS_CERTDIR=/certs"
+  ]
 
   volumes {
-    volume_name   = docker_volume.dind_volume.name
-    container_path = "/var/lib/docker"
+    volume_name    = docker_volume.certs_volume.name
+    container_path = "/certs/client"
   }
 
+# El contenedor de Dind usa el volumen de los datos compartidos por Jenkins pues puede necesitarlos para construir o ejecutar contenedores.
+  volumes {
+    volume_name    = docker_volume.jenkins_volume.name
+    container_path = "/var/jenkins_home"
+  }
+
+# Puerto de Docker para conexiones seguras
   ports {
-
-# 2375 es el puerto predeterminado para comunicaciones no seguras donde el demonio Docker escucha las conexiones.
-
-    internal = 2375
-    external = 2375
+    internal = 2376
+    external = 2376
   }
 }
 
-resource "docker_container" "jenkins_container" {
-  image       = "myjenkins-blueocean"  
-  name        = "jenkins_container"
 
-# Como Dind no se comunica con Jenkins pues es Jenkins quien envia los comandos a Dind, no es útil usar un alias 
+resource "docker_container" "jenkins_container" {
+  name  = "jenkins"
+  image = "myjenkins-blueocean"
+
+# Para que se reinicie siempre a no ser que lo pause manualmente, 
+  restart = "unless-stopped"
+
+# El contenedor de Dind es conveniente que esté listo antes que el de Jenkins pues este accederá a Dind
+  depends_on = [docker_container.dind_container] 
 
   networks_advanced {
     name = docker_network.jenkins_network.name
   }
 
+# Para conectarse a Dind y habilitar la verificación de certificados y su ubicación
+  env = [
+    "DOCKER_HOST=tcp://docker:2376",
+    "DOCKER_CERT_PATH=/certs/client",
+    "DOCKER_TLS_VERIFY=1"
+  ]
   volumes {
-    volume_name   = docker_volume.jenkins_volume.name
+    volume_name    = docker_volume.jenkins_volume.name
     container_path = "/var/jenkins_home"
   }
+  volumes {
+    volume_name    = docker_volume.certs_volume.name
+    container_path = "/certs/client"
+    read_only      = true
+  }
 
- # Interfaz web de Jenkins.
-
+# Puertos de la interfaz de Jenkins
   ports {
     internal = 8080
     external = 8080
   }
 
-# Puerto usado para la comunicación con agentes de Jenkins
-
+# Para agentes remotos de Jenkins
   ports {
     internal = 50000
     external = 50000
   }
 }
+
 
 
 ````
@@ -133,7 +158,6 @@ resource "docker_container" "jenkins_container" {
 
 - Para añadirlo ````git add docs/Despliegues.tf````  
 - Para comprobarlo ````git status````
-- Para poder hacer el commit debo identificarme ````git config --global user.name "Tu Nombre"```` y ````git config --global user.email "tuemail@example.com"````
 - Para hacer el commit ````git commit -m "Añadido archivo Despliegues.tf con configuración de Terraform"````
 - Para hacer el push ````git push````
 
@@ -163,51 +187,63 @@ terraform.tfstate.backup
 
 ````
 pipeline {
+    # No se asignará un agente global, cada etapa especificará su agente
     agent none
     options {
+        # Si una etapa falla, las siguientes etapas serán omitidas
         skipStagesAfterUnstable()
     }
     stages {
         stage('Build') {
             agent {
+                # Utiliza un contenedor Docker con Python en Alpine Linux
                 docker {
                     image 'python:3.12.0-alpine3.18'
                 }
             }
             steps {
+                # Compila los archivos Python para verificar errores de sintaxis y los guarda para usarlos en etapas posteriores.
                 sh 'python -m py_compile sources/add2vals.py sources/calc.py'
                 stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
         stage('Test') {
             agent {
+                # Utiliza un contenedor Docker con pytest para ejecutar pruebas.
                 docker {
                     image 'qnib/pytest'
                 }
             }
             steps {
+                # Ejecuta las pruebas unitarias y genera un reporte en formato XML.
                 sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
             }
             post {
                 always {
+                    # Publica siempre el resultado de las pruebas aunque fallen.
                     junit 'test-reports/results.xml'
                 }
             }
         }
         stage('Deliver') { 
+            # Esta etapa puede ejecutarse en cualquier agente
             agent any
             environment { 
                 VOLUME = '$(pwd)/sources:/src'
+                # Usa una imagen Docker específica para empaquetar el artefacto
                 IMAGE = 'cdrx/pyinstaller-linux:python2'
             }
             steps {
                 dir(path: env.BUILD_ID) { 
+                    # Recupera los resultados compilados de la etapa Build
                     unstash(name: 'compiled-results') 
+                    # Usa PyInstaller dentro de un contenedor para generar un ejecutable de Python.
                     sh "docker run --rm -v ${VOLUME} ${IMAGE} 'pyinstaller -F add2vals.py'" 
                 }
             }
             post {
                 success {
+                    # Guarda el artefacto generado como parte de los resultados de Jenkins
                     archiveArtifacts "${env.BUILD_ID}/sources/dist/add2vals" 
                     sh "docker run --rm -v ${VOLUME} ${IMAGE} 'rm -rf build dist'"
                 }
